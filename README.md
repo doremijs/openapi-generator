@@ -141,5 +141,4 @@ Open the url printed by the `hs` command in your browser, and you will see the l
 
 ## Roadmap
 
-[ ] Flutter generator and client
-[ ] Miniapp client
+[x] Miniapp client

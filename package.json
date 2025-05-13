@@ -1,6 +1,6 @@
 {
   "name": "@doremijs/o2t",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "OpenAPI to TypeScript code generator",
   "keywords": [
     "openapi",
@@ -34,6 +34,16 @@
       "import": {
         "types": "./dist/client/index.d.ts",
         "default": "./dist/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
+      }
+    },
+    "./client/es5": {
+      "import": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
       },
       "require": {
         "types": "./dist/client/index.d.ts",
