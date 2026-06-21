@@ -42,4 +42,4 @@ export type ExternalOptions = { signal?: AbortSignal; timeoutMs?: number }
 
 export type ResponseType<T, RawResponse> =
   | { error: true; response?: RawResponse; data: null }
-  | { error: false; data: T }
+  | { error: false; data: T; response?: RawResponse }

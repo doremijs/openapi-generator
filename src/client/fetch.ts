@@ -8,8 +8,9 @@ export type CustomFetchInit = Omit<RequestInit, 'headers'> & {
 export type CreateFetchClientConfig = {
   /**
    * fetch provider, default to globalThis.fetch
+   * Can be any function compatible with the fetch API
    */
-  fetchImpl?: typeof globalThis.fetch
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   /**
    * custom query serializer, default to URLSearchParams.toString()
    */
@@ -132,12 +133,12 @@ export function createFetchClient<
         }
         const contentType = response.headers.get('content-type')
         if (contentType?.includes('application/json')) {
-          return { error: false, data: await response.json() }
+          return { error: false, data: await response.json(), response }
         }
         if (contentType?.includes('text/plain')) {
-          return { error: false, data: await response.text() }
+          return { error: false, data: await response.text(), response }
         }
-        return { error: false, data: response }
+        return { error: false, data: response, response }
       } catch (error) {
         (config.errorHandler || console.error)(requestParams, null, error as Error)
         return { error: true, data: null }

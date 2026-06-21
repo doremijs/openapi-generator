@@ -1,0 +1,295 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;450;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Color palette - warm, sophisticated */
+  --color-bg: oklch(0.98 0.005 85);
+  --color-bg-alt: oklch(0.95 0.01 85);
+  --color-text: oklch(0.2 0.02 260);
+  --color-text-muted: oklch(0.45 0.015 260);
+  --color-primary: oklch(0.4 0.14 250);
+  --color-primary-light: oklch(0.55 0.12 250);
+  --color-accent: oklch(0.68 0.17 50);
+  --color-accent-hover: oklch(0.62 0.18 50);
+  --color-border: oklch(0.9 0.01 260);
+  --color-card: oklch(1 0 0);
+  --color-card-shadow: oklch(0.85 0.01 260);
+
+  /* Typography */
+  --font-display: 'Outfit', -apple-system, sans-serif;
+  --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Spacing */
+  --space-xs: clamp(0.25rem, 0.5vw, 0.5rem);
+  --space-sm: clamp(0.5rem, 1vw, 1rem);
+  --space-md: clamp(1rem, 2vw, 2rem);
+  --space-lg: clamp(2rem, 4vw, 4rem);
+  --space-xl: clamp(3rem, 6vw, 6rem);
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+/* Home Page - Full screen layout */
+.home-page {
+  width: 100%;
+  padding: var(--space-lg) var(--space-md);
+}
+
+/* Hero Section - asymmetric and bold */
+.home-header {
+  margin-bottom: var(--space-xl);
+  padding: var(--space-xl) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.home-header h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-md);
+}
+
+.home-header h1 span {
+  color: var(--color-primary);
+}
+
+.home-header p {
+  font-size: clamp(1.125rem, 2vw, 1.5rem);
+  color: var(--color-text-muted);
+  max-width: 600px;
+  font-weight: 400;
+}
+
+/* Example Cards - distinctive layout */
+.example-section {
+  margin-bottom: var(--space-xl);
+}
+
+.example-section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-lg);
+}
+
+.example-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-md);
+}
+
+.example-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: var(--space-md);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.example-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease-out);
+}
+
+.example-card:hover::before {
+  transform: scaleX(1);
+}
+
+.example-card:hover {
+  border-color: var(--color-primary-light);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px var(--color-card-shadow);
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-sm);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.example-card h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-xs);
+}
+
+.example-card p {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-md);
+  font-size: 0.95rem;
+}
+
+.card-features {
+  list-style: none;
+}
+
+.card-features li {
+  padding: var(--space-xs) 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.card-features li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--color-accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Features Section - asymmetric grid */
+.features-section {
+  margin-bottom: var(--space-xl);
+}
+
+.features-section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-lg);
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+@media (max-width: 768px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.feature-item {
+  padding: var(--space-md);
+  border-left: 2px solid var(--color-border);
+  transition: border-color 0.3s var(--ease-out);
+}
+
+.feature-item:hover {
+  border-color: var(--color-primary);
+}
+
+.feature-icon {
+  width: 28px;
+  height: 28px;
+  margin-bottom: var(--space-sm);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feature-item h3 {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-xs);
+}
+
+.feature-item p {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* Code Section - monospace aesthetic */
+.code-section {
+  margin-bottom: var(--space-xl);
+  padding: var(--space-lg);
+  background: var(--color-bg-alt);
+  border-radius: 8px;
+}
+
+.code-section h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-md);
+}
+
+.code-example {
+  background: var(--color-text);
+  border-radius: 8px;
+  padding: var(--space-md);
+  overflow: hidden;
+}
+
+.code-example code {
+  display: block;
+  color: oklch(0.98 0.005 85);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  text-align: left;
+}
+
+/* Footer */
+.home-footer {
+  padding: var(--space-lg) 0;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.home-footer a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: color 0.2s var(--ease-out);
+}
+
+.home-footer a:hover {
+  color: var(--color-primary);
+}

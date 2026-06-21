@@ -1,2 +1,6 @@
 export * from './fetch'
 export * from './miniapp'
+export * from './react'
+export * from './share'
+export * from './stream'
+export * from './utils'
