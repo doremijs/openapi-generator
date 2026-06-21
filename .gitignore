@@ -3,3 +3,5 @@ api
 dist
 o2t.config.mjs
 apis/
+.reasonix
+.bun-tmp

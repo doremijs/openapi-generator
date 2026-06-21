@@ -1,12 +1,14 @@
 /**
- * React hook for streaming chat functionality
+ * React hook for streaming chat/AI responses with SSE
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { StreamCallbacks } from '../stream'
-import { iterateStream, processStream } from '../stream'
+import type { SSEEventWithJSON } from '../stream'
+import { iterateStream } from '../stream'
 
-export type MessageStatus = 'idle' | 'local' | 'loading' | 'updating' | 'success' | 'error' | 'aborted'
+// ── Types ──
+
+export type MessageStatus = 'idle' | 'local' | 'pending' | 'streaming' | 'success' | 'error' | 'aborted'
 
 export type MessageInfo<TData> = {
   id: string | number
@@ -17,91 +19,127 @@ export type MessageInfo<TData> = {
   extraInfo?: Record<string, any>
 }
 
-export type StreamMessage<TChunk, TCurrent = TChunk> = {
+export type StreamMessage<TChunk, TMessage = any, TTransformed = any> = {
+  /** The latest data chunk */
   chunk: TChunk
+  /** All chunks received so far */
   chunks: TChunk[]
-  status: MessageStatus
+  /** Current message status */
+  status: Extract<MessageStatus, 'pending' | 'streaming'>
+  /** Response headers from the fetch */
   responseHeaders?: Headers
-  originMessage?: TCurrent
+  /** The previous message data (before current chunk) */
+  previousMessage?: TMessage | TTransformed
 }
 
 export type UseStreamChatOptions<TQuery, TMessage, TChunk = unknown, TTransformed = TMessage> = {
   /**
-   * Service function that makes the request and returns a Promise<Response>
+   * Service function that makes the request and returns a Promise<Response>.
+   * The signal is provided for aborting the request.
    */
   service: (params: TQuery, signal: AbortSignal) => Promise<Response>
 
   /**
-   * Transform local request params to initial message data
+   * Transform request params into the user's message data
+   * (shown immediately when the message is sent).
    */
   localTransform?: (params: TQuery) => TMessage
 
   /**
-   * Transform stream chunk to message data
+   * Transform a stream chunk into the AI response message data.
+   * Return `undefined` to skip updating the message for this chunk.
+   * Return a value to update the message with the transformed data.
    */
   streamTransform?: (message: StreamMessage<TChunk, TMessage | TTransformed>) => TTransformed | undefined
 
   /**
-   * Callback when stream completes
+   * Called when the stream receives its first data chunk
+   */
+  onStreamStart?: () => void
+
+  /**
+   * Called when the stream completes successfully with the final data.
+   * `finalData` is the last value returned by `streamTransform`.
    */
   onComplete?: (finalData: TTransformed | TMessage) => void
 
   /**
-   * Callback when stream errors
+   * Called when a stream error occurs
    */
   onError?: (error: Error) => void
 
   /**
-   * Dependencies that trigger defaultMessages reload when changed
+   * Dependencies that trigger defaultMessages reload when changed.
+   * Pass an empty array to disable auto-reload.
    */
   refreshDeps?: any[]
 
   /**
-   * Default messages to load on mount (can be async)
+   * Default/initial messages to load on mount or when refreshDeps change.
+   * Can be a static array or an async function.
    */
   defaultMessages?: TMessage[] | (() => Promise<TMessage[]>)
 
   /**
-   * Callback when chat finishes
+   * Called when the entire chat flow (send + stream) finishes,
+   * regardless of success or error.
    */
   onFinishChat?: () => void
 }
 
 export type UseStreamChatReturn<TQuery, TMessage, TTransformed> = {
+  /** All messages (user + AI responses) */
   messages: MessageInfo<TMessage | TTransformed>[]
+  /** True while a request is in flight (including streaming) */
   isLoading: boolean
+  /** True while the stream is actively receiving data */
+  isStreaming: boolean
+  /** Last error, if any */
   error: Error | null
+  /** Abort the current stream */
   abort: () => void
+  /** Send a new message */
   send: (params: TQuery) => Promise<void>
+  /** Clear all messages */
   clear: () => void
-  setMessage: (id: string | number, message: Partial<Omit<MessageInfo<TMessage | TTransformed>, 'id'>>) => void
+  /** Update a specific message by id */
+  setMessage: (id: string | number, patch: Partial<Omit<MessageInfo<TMessage | TTransformed>, 'id'>>) => void
+  /** Re-send the last request with the same params */
   refresh: () => Promise<void>
+  /** True while default messages are loading */
   isDefaultMessagesLoading: boolean
 }
 
+// ── Hook ──
+
 /**
- * React hook for streaming chat/AI responses
+ * React hook for streaming chat/AI responses via SSE.
+ *
+ * Designed for LLM chat interfaces:
+ * - Manages messages array (user + assistant)
+ * - Handles streaming response with incremental updates
+ * - Supports abort, refresh, history loading
  *
  * @example
- * ```ts
- * import { createFetchClient } from '@doremijs/o2t/client'
+ * ```tsx
+ * import { useStreamChat } from '@doremijs/o2t/client/react'
  *
- * const { messages, isLoading, send, abort, setMessage, refresh } = useStreamChat({
+ * const { messages, isLoading, send, abort } = useStreamChat({
  *   service: async (params, signal) => {
- *     return await fetch('/api/chat', {
+ *     const res = await fetch('/api/chat', {
  *       method: 'POST',
- *       headers: { 'Content-Type': 'application/json' },
  *       body: JSON.stringify(params),
  *       signal
  *     })
+ *     return res
  *   },
- *   localTransform: (params) => ({ role: 'user', content: params.message }),
- *   streamTransform: ({ chunks, responseHeaders }) => ({
- *     role: 'assistant',
- *     content: chunks.map((c: any) => c.text || c).join('')
+ *   localTransform: (params) => ({
+ *     role: 'user', content: params.message
  *   }),
- *   refreshDeps: [sessionId],
- *   defaultMessages: async () => loadHistory()
+ *   streamTransform: ({ chunks }) => ({
+ *     role: 'assistant',
+ *     content: chunks.join('')
+ *   })
  * })
  * ```
  */
@@ -110,32 +148,40 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
 ): UseStreamChatReturn<TQuery, TMessage, TTransformed> {
   const abortControllerRef = useRef<AbortController | null>(null)
   const lastParamsRef = useRef<TQuery | null>(null)
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+
   const [messages, setMessages] = useState<MessageInfo<TMessage | TTransformed>[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [isDefaultMessagesLoading, setIsDefaultMessagesLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  // Load default messages on mount or when refreshDeps change
+  // ── Default messages loading ──
+
   const loadDefaultMessages = useCallback(async () => {
-    if (!options.defaultMessages) return
+    const { defaultMessages } = optionsRef.current
+    if (!defaultMessages) return
 
     setIsDefaultMessagesLoading(true)
     try {
-      const msgs = typeof options.defaultMessages === 'function'
-        ? await (options.defaultMessages as () => Promise<TMessage[]>)()
-        : options.defaultMessages
+      const msgs = typeof defaultMessages === 'function'
+        ? await (defaultMessages as () => Promise<TMessage[]>)()
+        : defaultMessages
 
-      setMessages(msgs.map((data, index) => ({
-        id: `default-${index}`,
-        status: 'success' as const,
-        data
-      })))
+      if (Array.isArray(msgs)) {
+        setMessages(msgs.map((data, index) => ({
+          id: `default-${index}`,
+          status: 'success' as const,
+          data
+        })))
+      }
     } catch (err) {
       console.error('Failed to load default messages:', err)
     } finally {
       setIsDefaultMessagesLoading(false)
     }
-  }, [options.defaultMessages])
+  }, [])
 
   // Load default messages on mount
   useEffect(() => {
@@ -145,29 +191,37 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
 
   // Reload when refreshDeps change
   useEffect(() => {
-    if (options.refreshDeps && options.refreshDeps.length > 0) {
+    const deps = options.refreshDeps
+    if (deps && deps.length > 0) {
       loadDefaultMessages()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...(options.refreshDeps || [])])
+  }, [options.refreshDeps])
+
+  // ── Abort ──
 
   const abort = useCallback(() => {
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
     setIsLoading(false)
+    setIsStreaming(false)
     setMessages((prev) =>
       prev.map((msg) =>
-        msg.status === 'loading' || msg.status === 'updating'
+        msg.status === 'pending' || msg.status === 'streaming'
           ? { ...msg, status: 'aborted' as const }
           : msg
       )
     )
   }, [])
 
+  // ── Clear ──
+
   const clear = useCallback(() => {
     setMessages([])
     setError(null)
   }, [])
+
+  // ── Set Message ──
 
   const setMessage = useCallback((
     id: string | number,
@@ -184,18 +238,23 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
     })
   }, [])
 
+  // ── Send ──
+
   const send = useCallback(async (params: TQuery) => {
+    const { localTransform, streamTransform, onStreamStart, onComplete, onError, onFinishChat } = optionsRef.current
+
     abortControllerRef.current = new AbortController()
     lastParamsRef.current = params
     setIsLoading(true)
+    setIsStreaming(false)
     setError(null)
 
-    // Add local message
+    // Add local (user) message
     const localId = `local-${Date.now()}`
     const localMessage: MessageInfo<TMessage> = {
       id: localId,
       status: 'local',
-      data: options.localTransform?.(params) ?? ({} as TMessage)
+      data: localTransform?.(params) ?? ({} as TMessage)
     }
     setMessages((prev) => [...prev, localMessage])
 
@@ -203,76 +262,96 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
     const responseId = `response-${Date.now()}`
     const responseMessage: MessageInfo<TMessage | TTransformed> = {
       id: responseId,
-      status: 'loading',
+      status: 'pending',
       data: {} as TMessage,
       chunks: []
     }
     setMessages((prev) => [...prev, responseMessage])
 
     try {
-      const response = await options.service(params, abortControllerRef.current.signal)
+      const response = await optionsRef.current.service(params, abortControllerRef.current.signal)
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`)
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null — the server did not return a stream')
       }
 
       const chunks: TChunk[] = []
       let finalData: TMessage | TTransformed = responseMessage.data
-      let originMessage: TMessage | TTransformed | undefined
+      let chunksCount = 0
 
       for await (const event of iterateStream<TChunk>(response)) {
-        if (event.data === null) {
+        // Skip null data (non-JSON events like [DONE] are already handled by stream.ts)
+        if (event.data === null || event.data === undefined) {
           continue
         }
 
         chunks.push(event.data)
+        chunksCount++
+
+        // First chunk? Mark as streaming
+        if (chunksCount === 1) {
+          setIsStreaming(true)
+          setMessage(responseId, { status: 'streaming' })
+          onStreamStart?.()
+        }
 
         const streamMessage: StreamMessage<TChunk, TMessage | TTransformed> = {
           chunk: event.data,
           chunks: [...chunks],
-          status: 'updating',
+          status: 'streaming',
           responseHeaders: response.headers,
-          originMessage
+          previousMessage: chunksCount === 1 ? undefined : finalData
         }
 
-        const transformed = options.streamTransform?.(streamMessage)
+        const transformed = streamTransform?.(streamMessage)
         if (transformed !== undefined) {
-          originMessage = transformed
           finalData = transformed
         }
 
         setMessage(responseId, {
-          status: 'updating',
+          status: 'streaming',
           data: finalData,
           chunks: [...chunks]
         })
       }
 
+      // Mark as success
+      setIsStreaming(false)
       setMessage(responseId, {
         status: 'success',
         data: finalData,
         chunks: [...chunks]
       })
 
-      options.onComplete?.(finalData)
-      options.onFinishChat?.()
+      onComplete?.(finalData)
+      onFinishChat?.()
     } catch (err) {
       const error = err as Error
+      setIsStreaming(false)
+
       if (error.name === 'AbortError') {
         setMessage(responseId, { status: 'aborted' })
       } else {
         setError(error)
         setMessage(responseId, { status: 'error', error })
-        options.onError?.(error)
+        onError?.(error)
       }
+      onFinishChat?.()
     } finally {
       setIsLoading(false)
       abortControllerRef.current = null
     }
-  }, [options, setMessage])
+  }, [setMessage])
+
+  // ── Refresh ──
 
   const refresh = useCallback(async () => {
     if (lastParamsRef.current === null) {
-      throw new Error('Cannot refresh: no previous request')
+      throw new Error('Cannot refresh: no previous request. Call send() first.')
     }
     await send(lastParamsRef.current)
   }, [send])
@@ -280,6 +359,7 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
   return {
     messages,
     isLoading,
+    isStreaming,
     error,
     abort,
     send,
@@ -291,7 +371,20 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
 }
 
 /**
- * Simpler hook for basic streaming without message management
+ * Simpler hook for basic SSE streaming without chat message management.
+ * Good for one-off streaming data consumption.
+ *
+ * @example
+ * ```tsx
+ * const { start, abort, isLoading } = useStream()
+ * const handleClick = () => {
+ *   start(async (signal) => {
+ *     return fetch('/api/stream', { signal })
+ *   }, {
+ *     onData: (data) => console.log('Received:', data)
+ *   })
+ * }
+ * ```
  */
 export function useStream<TData = any>() {
   const [isLoading, setIsLoading] = useState(false)
@@ -301,7 +394,11 @@ export function useStream<TData = any>() {
   const start = useCallback(
     async (
       fetcher: (signal: AbortSignal) => Promise<Response>,
-      callbacks: StreamCallbacks<TData, TData>
+      callbacks: {
+        onData?: (chunk: TData) => void
+        onError?: (error: Error) => void
+        onComplete?: () => void
+      }
     ) => {
       abortControllerRef.current = new AbortController()
       setIsLoading(true)
@@ -309,19 +406,23 @@ export function useStream<TData = any>() {
 
       try {
         const response = await fetcher(abortControllerRef.current.signal)
+
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+          throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`)
         }
 
-        await processStream<TData>(response, {
-          onData: (data, chunks) => {
-            if (data !== null) {
-              callbacks.onData?.(data, chunks.filter((item): item is TData => item !== null))
-            }
-          },
-          onComplete: callbacks.onComplete,
-          onError: callbacks.onError
-        })
+        if (!response.body) {
+          throw new Error('Response body is null')
+        }
+
+        let chunksCount = 0
+        for await (const event of iterateStream<TData>(response)) {
+          if (event.data !== null && event.data !== undefined) {
+            callbacks.onData?.(event.data as TData)
+            chunksCount++
+          }
+        }
+        callbacks.onComplete?.()
       } catch (err) {
         const error = err as Error
         if (error.name !== 'AbortError') {

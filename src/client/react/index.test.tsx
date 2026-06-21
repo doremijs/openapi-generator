@@ -24,7 +24,7 @@ describe('React hooks - type definitions', () => {
     const message: StreamMessage<string> = {
       chunk: 'test',
       chunks: ['test'],
-      status: 'loading'
+      status: 'streaming'
     }
     expect(message.chunk).toBe('test')
   })

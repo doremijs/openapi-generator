@@ -1,12 +1,15 @@
 # OpenAPI generator
 
-This package amis to generate easy-to-use and type-safe frontend API clients from OpenAPI specifications.
+This package generates easy-to-use and type-safe frontend API clients from OpenAPI specifications.
 
-Currently, we provide a TypeScript schema generator and a fetch client.
+**Features:**
+- **TypeScript schema generator** — generates full TypeScript types from OpenAPI 3 / Swagger 2 specs
+- **Fetch client** — type-safe fetch-based HTTP client with interceptors
+- **SSE streaming** — first-class Server-Sent Events support for AI/streaming APIs
+- **React hooks** — `useStreamChat` for AI chat, `useRequest` for data fetching
+- **Miniapp client** — WeChat miniapp client (`wx.request`)
 
-## Usage
-
-1. Install the package:
+## Installation
 
 ```shell
 npm i @doremijs/o2t
@@ -15,7 +18,9 @@ npm i @doremijs/o2t
 # bun i @doremijs/o2t
 ```
 
-2. Run command `npx o2t init` to create a `o2t.config.mjs` configuration file, or you can create the configuration file `o2t.config.mjs` in the root of your project by yourself. The configuration file should look like this:
+## Usage — Code Generation
+
+1. Run `npx o2t init` to create a `o2t.config.mjs` configuration file, or create it manually:
 
 ```javascript
 import { defineConfig } from '@doremijs/o2t'
@@ -24,23 +29,21 @@ export default defineConfig({
 })
 ```
 
-3. Run the generator:
+2. Run the generator:
 
 ```shell
 npx o2t generate typescript
 ```
 
-4. The generated code will be in the `src/api` directory.
+3. The generated code will be in the `src/api` directory.
 
-5. Create a ts file `src/api/index.ts`, and import the generated API client:
+4. Create `src/api/index.ts` and set up the client:
 
 ```typescript
 import { createFetchClient } from '@doremijs/o2t/client'
 import type { OpenAPIs } from './schema'
 
 export const client = createFetchClient<OpenAPIs>({
-  // ... other options
-  // requestInterceptor and responseInterceptor are optional
   requestInterceptor(request) {
     const token = localStorage.getItem('access_token')
     if (!request.url.startsWith('/api/auth') && token) {
@@ -49,7 +52,6 @@ export const client = createFetchClient<OpenAPIs>({
     return request
   },
   responseInterceptor(request, response) {
-    // Handle response here
     return response
   },
   errorHandler(request, response, error) {
@@ -58,87 +60,185 @@ export const client = createFetchClient<OpenAPIs>({
 })
 ```
 
-If you get error when importing the client, you may need to set `compilerOptions.moduleResolution` to `bundler` and set `compilerOptions.module` to `ESNext` in your `tsconfig.json` file.
+If you get an import error, set `compilerOptions.moduleResolution` to `bundler` and `compilerOptions.module` to `ESNext` in your `tsconfig.json`.
 
-6. Use the API client to make requests:
+5. Make type-safe requests:
 
 ```typescript
-const result = await client.get('/path/to/api', {
-  query: { param1: 'value1', param2: 'value2' },
-  params: { id: 123 },
-  body: { name: 'John' }
+const result = await client.get('/pet/{petId}', {
+  params: { petId: 1 },
+  query: { status: 'available' }
 })
 if (!result.error) {
-  console.log(result.data)
-} else {
-  // Handle error here
+  console.log(result.data)  // Fully typed!
 }
 ```
 
+## SSE Streaming
+
+The package includes a production-grade SSE (Server-Sent Events) streaming engine, designed for AI chat APIs and real-time data.
+
+### Quick Start
+
+```typescript
+import { createFetchClient } from '@doremijs/o2t/client'
+import { processStream } from '@doremijs/o2t/client/stream'
+
+const client = createFetchClient()
+
+// 1. Make a request (streaming endpoint)
+const result = await client.post('/api/chat', {
+  body: { stream: true, model: 'gpt-4', messages: [...] }
+})
+
+// 2. Process the SSE stream
+if (!result.error && result.response) {
+  await processStream(result.response, {
+    onData: (chunk) => console.log('Received:', chunk),
+    onComplete: () => console.log('Stream complete')
+  })
+}
+```
+
+### Three Consumption Styles
+
+| API | Style | When to use |
+|---|---|---|
+| `processStream(response, callbacks)` | Callback | Simplest — just need `onData`/`onError`/`onComplete` |
+| `iterateStream(response)` | Async iterator | Need fine-grained control with `for await...of` |
+| `accumulateStream(response)` | Collect all | Short streams where you want all results at once |
+
+### Streaming with React
+
+```typescript
+import { useStreamChat } from '@doremijs/o2t/client/react'
+
+function Chat() {
+  const { messages, isLoading, send, abort } = useStreamChat({
+    service: async (params, signal) => {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify(params),
+        signal
+      })
+      return res
+    },
+    localTransform: (params) => ({
+      role: 'user',
+      content: params.message
+    }),
+    streamTransform: ({ chunks }) => ({
+      role: 'assistant',
+      content: chunks.map(c => c?.choices?.[0]?.delta?.content || '').join('')
+    })
+  })
+
+  return (
+    <div>
+      {messages.map(msg => <div key={msg.id}>{msg.data.content}</div>)}
+      <button onClick={() => send({ message: 'Hello' })}>Send</button>
+      {isLoading && <button onClick={abort}>Stop</button>}
+    </div>
+  )
+}
+```
+
+### Configuration Options
+
+The stream engine handles all common SSE variants out of the box, but you can customize:
+
+```typescript
+// Skip non-JSON events (like [DONE] markers silently)
+for await (const event of iterateStream(response, {
+  nonJSONBehavior: 'skip',
+})) { }
+
+// Custom termination markers
+await processStream(response, callbacks, {
+  terminationMarkers: ['[END]', '[DONE]']
+})
+
+// Disable termination detection
+const chunks = await accumulateStream(response, {
+  terminationMarkers: false
+})
+```
+
+### SSE Compatibility
+
+The parser is fully compliant with the [W3C SSE specification](https://html.spec.whatwg.org/multipage/server-sent-events.html) and tested against:
+
+- ✅ Standard SSE (`data: ...\n\n`)
+- ✅ CRLF line endings (`\r\n\r\n`)
+- ✅ Multiple `data:` lines per event
+- ✅ `event:` / `id:` / `retry:` fields
+- ✅ Comment lines (`: ...`)
+- ✅ UTF-8 BOM
+- ✅ OpenAI `[DONE]` termination marker
+- ✅ Non-JSON data handling
+- ✅ Error events (`event: error`)
+- ✅ Cross-chunk boundaries (streaming split across multiple reads)
+
 ## Configuration
 
-The `defineConfig` function takes an object with the following properties:
+The `defineConfig` function accepts:
 
-  specUrl: string
-  isVersion2?: boolean
-  outputDir?: string
-  tempFilePath?: string
-  preferUnknownType?: 'any' | 'unknown'
-  customHeaders?: Record<string, string>
-  basicAuth?: {
-    username: string
-    password: string
-  }
-
-- `specUrl`: The URL of the OpenAPI specification file.
-- `isVersion2`: Whether the OpenAPI specification is swagger version 2, you may not need to set this property as the generator will automatically detect the version of the specification.
-- `outputDir`: The directory where the generated code will be saved. (default: "src/api")
-- `tempFilePath`: The path of the temporary file used to store the downloaded OpenAPI specification file. (default: "node_modules/.o2t/openapi.json").
-- `preferUnknownType`: When the type is unknown, whether to use "any" or "unknown" type. (default: "any").
-- `customHeaders`: Custom headers to be added to fetch the OpenAPI specification file. For example, you may need to add a token or a cookie to access the file.
-- `basicAuth`: Basic authentication information to be added to fetch the OpenAPI specification file. For example, you may need to access a private API that requires authentication.
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `specUrl` | `string` | — | OpenAPI specification URL |
+| `isVersion2` | `boolean` | auto | Force Swagger 2.0 mode |
+| `outputDir` | `string` | `"src/api"` | Output directory for generated code |
+| `tempFilePath` | `string` | `"node_modules/.o2t/openapi.json"` | Temporary file for downloaded spec |
+| `preferUnknownType` | `'any' \| 'unknown'` | `"any"` | Type for unknown schemas |
+| `customHeaders` | `Record<string, string>` | — | Custom headers for spec download |
+| `basicAuth` | `{ username, password }` | — | Basic auth credentials |
 
 ## Development
-
-To develop the generator, you need to clone the repository and install the dependencies:
 
 ```shell
 bun install
 ```
 
-Then, create a configuration file `o2t.config.mjs` in the root dir:
+Create `o2t.config.mjs`:
 
 ```javascript
 import { defineConfig } from './src'
-
 export default defineConfig({
   specUrl: 'https://generator.swagger.io/api/swagger.json'
 })
 ```
 
-To run the generator in development mode:
+Run in development mode:
 
 ```shell
 bun dev generate typescript
 ```
 
-If you need to test more OpenAPI specifications, you can download them to the `apis` folder in the root of the project, and serve the `apis` folder with a web server. For example:
+### Testing
 
 ```shell
-npx http-server apis
+bun test                          # All tests
+bun test:stream                   # SSE stream tests
+bun test:fetch                    # Fetch client tests
+bun test:react                    # React hooks tests
+bun test:petstore                 # PetStore integration tests
 ```
 
-Or try my `hs` tool:
+### Example App
+
+An example React + Vite app is available in the `example/` directory:
 
 ```shell
-curl hs.erguotou.me/install | bash
-chmod +x hs
-mv hs /usr/local/bin/hs
-hs -f apis -m index
+cd example
+bun install
+bun dev
 ```
 
-Open the url printed by the `hs` command in your browser, and you will see the list of OpenAPI specifications. Copy the URL of the specification you want to test, and change the `specUrl` property in the `o2t.config.mjs` file.
+Includes:
+- AI chat with streaming responses (ChatPage)
+- PetStore API demo (PetStorePage)
+- Full type-safe integration
 
-## Roadmap
+## License
 
-[x] Miniapp client
+LGPL-3.0-or-later
