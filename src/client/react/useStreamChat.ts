@@ -243,6 +243,8 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
   const send = useCallback(async (params: TQuery) => {
     const { localTransform, streamTransform, onStreamStart, onComplete, onError, onFinishChat } = optionsRef.current
 
+    // Cancel any previous request before starting a new one
+    abortControllerRef.current?.abort()
     abortControllerRef.current = new AbortController()
     lastParamsRef.current = params
     setIsLoading(true)
@@ -272,11 +274,19 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
       const response = await optionsRef.current.service(params, abortControllerRef.current.signal)
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`)
+        let body = ''
+        try { body = await response.text() } catch {}
+        throw new Error(
+          `API error: ${response.status} ${response.statusText}` +
+          (body ? ` — ${body.slice(0, 500)}` : '')
+        )
       }
 
       if (!response.body) {
-        throw new Error('Response body is null — the server did not return a stream')
+        const contentType = response.headers.get('content-type') || 'unknown'
+        throw new Error(
+          `Response body is null — the server did not return a stream (Content-Type: ${contentType})`
+        )
       }
 
       const chunks: TChunk[] = []
@@ -338,7 +348,7 @@ export function useStreamChat<TQuery = any, TMessage = any, TChunk = unknown, TT
       } else {
         setError(error)
         setMessage(responseId, { status: 'error', error })
-        onError?.(error)
+        onError?.(error) || console.error('[useStreamChat]', error)
       }
       onFinishChat?.()
     } finally {
@@ -400,6 +410,7 @@ export function useStream<TData = any>() {
         onComplete?: () => void
       }
     ) => {
+      abortControllerRef.current?.abort()
       abortControllerRef.current = new AbortController()
       setIsLoading(true)
       setError(null)
@@ -408,11 +419,19 @@ export function useStream<TData = any>() {
         const response = await fetcher(abortControllerRef.current.signal)
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`)
+          let body = ''
+          try { body = await response.text() } catch {}
+          throw new Error(
+            `API error: ${response.status} ${response.statusText}` +
+            (body ? ` — ${body.slice(0, 500)}` : '')
+          )
         }
 
         if (!response.body) {
-          throw new Error('Response body is null')
+          const ct = response.headers.get('content-type') || 'unknown'
+          throw new Error(
+            `Response body is null — server did not return a stream (Content-Type: ${ct})`
+          )
         }
 
         let chunksCount = 0

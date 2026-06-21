@@ -129,6 +129,15 @@ export class SSEParser {
     }
 
     this.buffer += this.normalizeLineEndings(chunk)
+
+    // Guard against unbounded buffer growth (malicious/misconfigured server)
+    if (this.buffer.length > 1_048_576) {
+      throw new Error(
+        'SSE buffer overflow: the stream has produced more than 1MB of data ' +
+        'without a blank line terminator. This may indicate a misconfigured server.'
+      )
+    }
+
     const events: string[] = []
 
     while (true) {

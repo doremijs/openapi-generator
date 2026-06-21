@@ -67,15 +67,15 @@ for await (const file of walkDir(clientSrcDir)) {
   })
   await writeFile(destMjs, esmCode)
 
-  // Minified ESM (.js)
-  const { code: minified } = await transform(source, {
+  // Minified CJS (.js) — for `require()` consumers per exports field
+  const { code: cjsCode } = await transform(source, {
     sourceMaps: false,
-    module: { type: 'es6' },
+    module: { type: 'commonjs' },
     jsc: {
       target: 'es2021' as const,
       parser: { syntax: 'typescript' as const },
       minify: { compress: true, mangle: true },
     },
   })
-  await writeFile(destJs, minified)
+  await writeFile(destJs, cjsCode)
 }

@@ -80,6 +80,26 @@
         "types": "./dist/client/miniapp.d.ts",
         "default": "./dist/client/miniapp.js"
       }
+    },
+    "./client/share": {
+      "import": {
+        "types": "./dist/client/share.d.ts",
+        "default": "./dist/client/share.mjs"
+      },
+      "require": {
+        "types": "./dist/client/share.d.ts",
+        "default": "./dist/client/share.js"
+      }
+    },
+    "./client/utils": {
+      "import": {
+        "types": "./dist/client/utils.d.ts",
+        "default": "./dist/client/utils.mjs"
+      },
+      "require": {
+        "types": "./dist/client/utils.d.ts",
+        "default": "./dist/client/utils.js"
+      }
     }
   },
   "scripts": {
@@ -99,7 +119,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
-    "react": "^16.8.0 || ^17.0.0 || ^18.0.0"
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
