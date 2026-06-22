@@ -1,0 +1,95 @@
+name: Publish to npm
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version change
+        id: version
+        shell: bash
+        run: |
+          current_version=$(node -p "require('./package.json').version")
+          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before_sha="${{ github.event.before }}"
+          if [ -z "$before_sha" ] || [ "$before_sha" = "0000000000000000000000000000000000000000" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git show "$before_sha:package.json" >/tmp/previous-package.json 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version=$(node -p "require('/tmp/previous-package.json').version")
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+
+          if [ "$current_version" = "$previous_version" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "package.json version unchanged: $current_version"
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "package.json version changed: $previous_version -> $current_version"
+
+      - name: Stop when version is unchanged
+        if: steps.version.outputs.changed != 'true'
+        run: echo "Skipping publish because package.json version did not change."
+
+      - name: Setup Node.js
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Setup Bun
+        if: steps.version.outputs.changed == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        if: steps.version.outputs.changed == 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        if: steps.version.outputs.changed == 'true'
+        run: bun run test:ci
+
+      - name: Build package
+        if: steps.version.outputs.changed == 'true'
+        run: bun run build
+
+      - name: Publish to npm
+        if: steps.version.outputs.changed == 'true'
+        run: npm publish --provenance --access public

@@ -1,6 +1,6 @@
 {
   "name": "@doremijs/o2t",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "description": "OpenAPI to TypeScript code generator",
   "keywords": [
     "openapi",
@@ -13,6 +13,10 @@
   "license": "LGPL-3.0-or-later",
   "author": "erguotou <erguotou525@gmail.com>",
   "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/doremijs/openapi-generator.git"
+  },
   "files": [
     "bin/o2t.mjs",
     "dist"
@@ -109,6 +113,7 @@
     "serve": "hs -f apis -m index -p 7007",
     "format": "biome format --write ./src",
     "test": "bun test",
+    "test:ci": "bun test src/client/stream.test.ts src/client/fetch.test.ts src/client/react/index.test.tsx src/client/react/useRequest.test.ts",
     "test:stream": "bun test src/client/stream.test.ts",
     "test:fetch": "bun test src/client/fetch.test.ts",
     "test:react": "bun test src/client/react/index.test.tsx",
