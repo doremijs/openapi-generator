@@ -27,44 +27,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect version change
+      - name: Detect publishable version
         id: version
         shell: bash
         run: |
+          package_name=$(node -p "require('./package.json').name")
           current_version=$(node -p "require('./package.json').version")
+          echo "package_name=$package_name" >> "$GITHUB_OUTPUT"
           echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          published_version=""
+          if npm view "$package_name" version --registry=https://registry.npmjs.org >/tmp/npm-version.txt 2>/tmp/npm-version.err; then
+            published_version=$(tr -d '\n' </tmp/npm-version.txt)
+          else
+            if grep -qi "E404" /tmp/npm-version.err; then
+              echo "Package $package_name has not been published yet."
+            else
+              echo "Failed to query npm for $package_name version."
+              cat /tmp/npm-version.err
+              exit 1
+            fi
           fi
 
-          before_sha="${{ github.event.before }}"
-          if [ -z "$before_sha" ] || [ "$before_sha" = "0000000000000000000000000000000000000000" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          echo "published_version=$published_version" >> "$GITHUB_OUTPUT"
 
-          if ! git show "$before_sha:package.json" >/tmp/previous-package.json 2>/dev/null; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          previous_version=$(node -p "require('/tmp/previous-package.json').version")
-          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
-
-          if [ "$current_version" = "$previous_version" ]; then
+          if [ -n "$published_version" ] && [ "$current_version" = "$published_version" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "package.json version unchanged: $current_version"
+            echo "Skipping publish because npm already has version $current_version."
             exit 0
           fi
 
           echo "changed=true" >> "$GITHUB_OUTPUT"
-          echo "package.json version changed: $previous_version -> $current_version"
+          if [ -n "$published_version" ]; then
+            echo "package.json version differs from npm: $published_version -> $current_version"
+          else
+            echo "package.json version $current_version will be published as the first npm release."
+          fi
 
-      - name: Stop when version is unchanged
+      - name: Stop when npm already has this version
         if: steps.version.outputs.changed != 'true'
-        run: echo "Skipping publish because package.json version did not change."
+        run: echo "Skipping publish because npm already has version ${{ steps.version.outputs.current_version }}."
 
       - name: Setup Node.js
         if: steps.version.outputs.changed == 'true'

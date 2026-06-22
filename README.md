@@ -246,8 +246,8 @@ This repository includes a GitHub Actions workflow at `.github/workflows/npm-pub
 It will publish the package to npm when all of the following are true:
 
 - code is pushed to the `main` branch
-- `package.json` changed in that push
-- the `version` field in `package.json` is different from the previous commit
+- `package.json` or `.github/workflows/npm-publish.yml` changed in that push
+- the `version` field in `package.json` is different from the version currently published on npm
 - CI tests and build pass
 
 The workflow uses npm trusted publishing with OIDC and runs:
@@ -271,7 +271,7 @@ GitHub Actions trusted publishing also requires one manual setup step on npm:
    - workflow file: `npm-publish.yml`
    - branch: `main`
 
-After that, changing `package.json.version` on `main` will trigger an authenticated publish without storing an npm access token in GitHub secrets.
+After that, as long as the version in `package.json` is newer than the version currently published on npm, pushes to `main` that touch `package.json` or the workflow file can trigger an authenticated publish without storing an npm access token in GitHub secrets.
 
 ## License
 
