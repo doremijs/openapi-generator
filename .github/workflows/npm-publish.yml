@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - package.json
+      - bun.lock
       - .github/workflows/npm-publish.yml
   workflow_dispatch:
 
