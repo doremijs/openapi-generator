@@ -61,6 +61,20 @@ export async function generate(options: GenerateOptions, generator: SupportedGen
           // @ts-ignore
           apiGroups[_method][path] = operation
           const { queryList, paramList, headerList } = extractParameters(apiGroups[_method][path].parameters)
+          // 检测路径中 {param} / :param 模板但未在 OpenAPI 参数中定义的情况
+          // 部分后端接口在 path 中使用了 {id} 或 :id 但未在 parameters 中声明
+          const pathTemplateParams = path.match(/\{(\w+)\}|:(\w+)/g) || []
+          for (const match of pathTemplateParams) {
+            const paramName = match.startsWith('{') ? match.slice(1, -1) : match.slice(1)
+            if (!paramList.find(p => p.name === paramName)) {
+              paramList.push({
+                name: paramName,
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              })
+            }
+          }
           apiGroups[_method][path].queryList = queryList
           apiGroups[_method][path].paramList = paramList
           apiGroups[_method][path].headerList = headerList
