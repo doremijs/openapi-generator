@@ -1,6 +1,6 @@
 {
   "name": "@doremijs/o2t",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "OpenAPI to TypeScript code generator",
   "keywords": [
     "openapi",
@@ -18,91 +18,91 @@
     "url": "git+https://github.com/doremijs/openapi-generator.git"
   },
   "files": [
-    "bin/o2t.mjs",
+    "bin/o2t.js",
     "dist"
   ],
   "bin": {
-    "o2t": "bin/o2t.mjs"
+    "o2t": "bin/o2t.js"
   },
   "exports": {
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "default": "./dist/index.js"
       },
       "require": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "default": "./dist/index.cjs"
       }
     },
     "./client": {
       "import": {
         "types": "./dist/client/index.d.ts",
-        "default": "./dist/client/index.mjs"
+        "default": "./dist/client/index.js"
       },
       "require": {
         "types": "./dist/client/index.d.ts",
-        "default": "./dist/client/index.js"
+        "default": "./dist/client/index.cjs"
       }
     },
     "./client/fetch": {
       "import": {
         "types": "./dist/client/fetch.d.ts",
-        "default": "./dist/client/fetch.mjs"
+        "default": "./dist/client/fetch.js"
       },
       "require": {
         "types": "./dist/client/fetch.d.ts",
-        "default": "./dist/client/fetch.js"
+        "default": "./dist/client/fetch.cjs"
       }
     },
     "./client/stream": {
       "import": {
         "types": "./dist/client/stream.d.ts",
-        "default": "./dist/client/stream.mjs"
+        "default": "./dist/client/stream.js"
       },
       "require": {
         "types": "./dist/client/stream.d.ts",
-        "default": "./dist/client/stream.js"
+        "default": "./dist/client/stream.cjs"
       }
     },
     "./client/react": {
       "import": {
         "types": "./dist/client/react/index.d.ts",
-        "default": "./dist/client/react/index.mjs"
+        "default": "./dist/client/react/index.js"
       },
       "require": {
         "types": "./dist/client/react/index.d.ts",
-        "default": "./dist/client/react/index.js"
+        "default": "./dist/client/react/index.cjs"
       }
     },
     "./client/miniapp": {
       "import": {
         "types": "./dist/client/miniapp.d.ts",
-        "default": "./dist/client/miniapp.mjs"
+        "default": "./dist/client/miniapp.js"
       },
       "require": {
         "types": "./dist/client/miniapp.d.ts",
-        "default": "./dist/client/miniapp.js"
+        "default": "./dist/client/miniapp.cjs"
       }
     },
     "./client/share": {
       "import": {
         "types": "./dist/client/share.d.ts",
-        "default": "./dist/client/share.mjs"
+        "default": "./dist/client/share.js"
       },
       "require": {
         "types": "./dist/client/share.d.ts",
-        "default": "./dist/client/share.js"
+        "default": "./dist/client/share.cjs"
       }
     },
     "./client/utils": {
       "import": {
         "types": "./dist/client/utils.d.ts",
-        "default": "./dist/client/utils.mjs"
+        "default": "./dist/client/utils.js"
       },
       "require": {
         "types": "./dist/client/utils.d.ts",
-        "default": "./dist/client/utils.js"
+        "default": "./dist/client/utils.cjs"
       }
     }
   },
